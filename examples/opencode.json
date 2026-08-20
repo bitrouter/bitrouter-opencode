@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "$comment": "Manual alternative to installing @bitrouter/opencode. Declares the provider by hand — no dynamic model discovery, no device login. Swap baseURL to http://127.0.0.1:4356/v1 for a local BitRouter daemon.",
+  "provider": {
+    "bitrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "BitRouter",
+      "options": {
+        "baseURL": "https://api.bitrouter.ai/v1",
+        "apiKey": "{env:BITROUTER_API_KEY}"
+      },
+      "models": {
+        "kimi-k2.5": {
+          "name": "Kimi K2.5 via BitRouter"
+        }
+      }
+    }
+  }
+}

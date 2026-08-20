@@ -1,0 +1,13 @@
+# The opencode harness (@opencode-ai/plugin, @opencode-ai/sdk) is the contract
+# this plugin is written against, so a bump is the signal to re-check
+# compatibility. CI builds and tests the bump PR.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule: { interval: "weekly" }
+    labels: ["harness-update"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule: { interval: "monthly" }
