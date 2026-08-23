@@ -63,8 +63,10 @@ stage of the provider's life:
 ## The auto route
 
 `bitrouter/auto` hands model choice back to BitRouter: the request carries
-`auto` as its model and the gateway's routing policy picks the model per
-request. It leads every catalog the plugin produces, and it is the default
+`bitrouter/auto` as its model and the gateway's routing policy picks the model
+per request. `bitrouter/` is a namespace BitRouter reserves for itself, so the
+vendor segment names the router being addressed rather than the token
+destination. It leads every catalog the plugin produces, and it is the default
 `model` and `small_model`.
 
 The rest of the catalog is still there. `bitrouter/auto` is the default, not
@@ -77,12 +79,14 @@ provider is seeded with the auto route alone. That is deliberate: without at
 least one model the provider would not be selectable and you could not reach
 `/connect` at all. The rest of the catalog fills in on first use.
 
-Until BitRouter's own catalog lists `auto`, the plugin synthesizes the entry
+Until BitRouter's own catalog lists `bitrouter/auto`, the plugin synthesizes the entry
 with deliberately conservative capacities (128K context, 16K output). They are
 the floor rather than the ceiling on purpose — `auto` may land on any model in
 the ladder, and under-claiming compacts a session early where over-claiming
-fails a request outright, mid-turn. The moment `/v1/models` serves an `auto`
-entry of its own, that entry wins and carries the real numbers with no release
+fails a request outright, mid-turn. A gateway that ever serves an entry under
+this id supersedes the placeholder, though none does today: the namespace is
+resolved before any provider lookup and BitRouter's registry validator
+refuses catalog models under `bitrouter/`, so the entry has to come from
 here.
 
 ## Configuration

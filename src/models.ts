@@ -208,9 +208,11 @@ export function autoModel(): DiscoveredModel {
  * Put the auto route at the head of the catalog, synthesizing it when the
  * gateway does not serve one yet.
  *
- * The served entry always wins: BitRouter owns the route, and once its catalog
- * describes `auto` the real context window, pricing, and capabilities replace
- * the placeholder above without a release here. Order matters because the head
+ * A served entry still wins if one ever appears, though none does today:
+ * `bitrouter/` is resolved before any provider lookup, and BitRouter's registry
+ * validator refuses catalog models under it, so the entry has to come from
+ * here. The check costs nothing and keeps the placeholder from shadowing a
+ * future one. Order matters because the head
  * of this list is what a surface offers first.
  */
 export function withAutoModel(discovered: DiscoveredModel[]): DiscoveredModel[] {

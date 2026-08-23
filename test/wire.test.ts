@@ -61,7 +61,7 @@ describe("BitRouter Cloud wire shape", () => {
 
   it("leads with the auto route", () => {
     const { models } = mapped("cloud-models");
-    expect(models[0].id).toBe("auto");
+    expect(models[0].id).toBe("bitrouter/auto");
     expect(models).toHaveLength(4); // three served + auto
   });
 });
@@ -81,6 +81,6 @@ describe("local daemon wire shape", () => {
   });
 
   it("still leads with the auto route", () => {
-    expect(mapped("local-models").models[0].id).toBe("auto");
+    expect(mapped("local-models").models[0].id).toBe("bitrouter/auto");
   });
 });

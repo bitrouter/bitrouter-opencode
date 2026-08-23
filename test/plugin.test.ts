@@ -120,7 +120,7 @@ describe("config hook", () => {
     expect(p.options.baseURL).toBe("http://127.0.0.1:4356/v1");
     // loopback daemons run skip_auth, but opencode still wants a key present
     expect(p.options.apiKey).toBe("bitrouter-local");
-    expect(Object.keys(p.models).sort()).toEqual(["auto", "claude-opus-4-8", "kimi-k2.5"]);
+    expect(Object.keys(p.models).sort()).toEqual(["bitrouter/auto", "claude-opus-4-8", "kimi-k2.5"]);
     expect(p.models["kimi-k2.5"].name).toBe("Kimi K2.5");
     expect(p.models["kimi-k2.5"].limit?.context).toBe(256000);
   });
@@ -132,7 +132,11 @@ describe("config hook", () => {
     await hooks.config!(config);
 
     expect(config.model).toBe(AUTO_MODEL_REF);
-    expect(config.model).toBe("bitrouter/auto");
+    // opencode references a model as `<provider>/<model id>`, and the model id
+    // here is BitRouter's reserved slug `bitrouter/auto` — so the vendor
+    // segment appears twice, exactly as it does for every catalog model
+    // (`bitrouter/anthropic/claude-opus-4.6`).
+    expect(config.model).toBe("bitrouter/bitrouter/auto");
     expect(config.small_model).toBe(AUTO_MODEL_REF);
   });
 
@@ -161,7 +165,7 @@ describe("config hook", () => {
     expect(p.options.apiKey).toBeUndefined();
     // Unreachable is not unusable: the auto route keeps the provider
     // selectable, which is what makes `/connect` reachable at all.
-    expect(Object.keys(p.models)).toEqual(["auto"]);
+    expect(Object.keys(p.models)).toEqual(["bitrouter/auto"]);
   });
 
   it("does not overwrite a provider block the user wrote", async () => {
@@ -183,7 +187,7 @@ describe("config hook", () => {
     expect(p.options.baseURL).toBe("https://proxy.internal/v1");
     // the user's model survives, and the discovered ones are added alongside
     expect(Object.keys(p.models).sort()).toEqual([
-      "auto",
+      "bitrouter/auto",
       "claude-opus-4-8",
       "kimi-k2.5",
       "my-model",
@@ -293,7 +297,7 @@ describe("provider hook", () => {
     const models = await hooks.provider!.models!(provider, {
       auth: { type: "api", key: "brvk_1" },
     });
-    expect(Object.keys(models).sort()).toEqual(["auto", "claude-opus-4-8", "kimi-k2.5"]);
+    expect(Object.keys(models).sort()).toEqual(["bitrouter/auto", "claude-opus-4-8", "kimi-k2.5"]);
     expect(models["kimi-k2.5"].limit.context).toBe(256000);
   });
 

@@ -169,17 +169,17 @@ describe("toRuntimeModel", () => {
 describe("withAutoModel", () => {
   it("puts a synthesized auto route at the head of the catalog", () => {
     const out = withAutoModel([CLOUD]);
-    expect(out.map((m) => m.id)).toEqual(["auto", "anthropic/claude-opus-4.6"]);
+    expect(out.map((m) => m.id)).toEqual(["bitrouter/auto", "anthropic/claude-opus-4.6"]);
     expect(out[0]).toEqual(autoModel());
   });
 
   it("offers the auto route even when nothing was discovered", () => {
-    expect(withAutoModel([]).map((m) => m.id)).toEqual(["auto"]);
+    expect(withAutoModel([]).map((m) => m.id)).toEqual(["bitrouter/auto"]);
   });
 
   it("prefers the served entry once BitRouter lists auto itself", () => {
     const served: DiscoveredModel = {
-      id: "auto",
+      id: "bitrouter/auto",
       name: "BitRouter Auto",
       max_input_tokens: 1000000,
       capabilities: ["tools", "reasoning"],
@@ -192,7 +192,7 @@ describe("withAutoModel", () => {
   });
 
   it("never lists the auto route twice", () => {
-    const out = withAutoModel([{ id: "auto" }, CLOUD, { id: "auto" }]);
-    expect(out.filter((m) => m.id === "auto")).toHaveLength(1);
+    const out = withAutoModel([{ id: "bitrouter/auto" }, CLOUD, { id: "bitrouter/auto" }]);
+    expect(out.filter((m) => m.id === "bitrouter/auto")).toHaveLength(1);
   });
 });
