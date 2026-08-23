@@ -114,7 +114,7 @@ describe("toConfigModel", () => {
 
   it("infers an input modality from a capability token", () => {
     const m = toConfigModel({ id: "x", capabilities: ["file_input", "tools"] });
-    expect(m.modalities.input).toEqual(["text", "pdf"]);
+    expect(m.modalities?.input).toEqual(["text", "pdf"]);
     expect(m.attachment).toBe(true);
   });
 
@@ -188,7 +188,7 @@ describe("withAutoModel", () => {
     expect(out[0]).toBe(served);
     expect(out).toHaveLength(2);
     // The served metadata wins over the placeholder's conservative floor.
-    expect(toConfigModel(out[0]).limit.context).toBe(1000000);
+    expect(toConfigModel(out[0]).limit?.context).toBe(1000000);
   });
 
   it("never lists the auto route twice", () => {

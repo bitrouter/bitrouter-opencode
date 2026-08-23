@@ -87,7 +87,7 @@ type ProviderBlock = {
   npm?: string;
   name?: string;
   options: { baseURL?: string; apiKey?: string };
-  models: Record<string, { name?: string }>;
+  models: Record<string, { name?: string; limit?: { context?: number; output?: number } }>;
 };
 
 function providerBlock(config: unknown): ProviderBlock {
@@ -122,7 +122,7 @@ describe("config hook", () => {
     expect(p.options.apiKey).toBe("bitrouter-local");
     expect(Object.keys(p.models).sort()).toEqual(["auto", "claude-opus-4-8", "kimi-k2.5"]);
     expect(p.models["kimi-k2.5"].name).toBe("Kimi K2.5");
-    expect(p.models["kimi-k2.5"].limit.context).toBe(256000);
+    expect(p.models["kimi-k2.5"].limit?.context).toBe(256000);
   });
 
   it("makes the auto route the default model and small model", async () => {
