@@ -17,12 +17,22 @@ export const bitrouter = {
   local: {
     apiBaseUrl: "http://127.0.0.1:4356/v1",
   },
-  /**
-   * Shown as the sole placeholder model when the catalog cannot be fetched yet
-   * (typically: cloud, before `/connect bitrouter`). Keeps the provider
-   * selectable so the user can reach the login flow at all.
-   */
-  defaultModel: "kimi-k2.5",
 } as const;
 
-export type BitrouterConstants = typeof bitrouter;
+/** The provider id. Must match the key used in `opencode.json` and `/connect`. */
+export const PROVIDER_ID = "bitrouter";
+
+/**
+ * The model id that hands model choice back to BitRouter. Paired with
+ * {@link PROVIDER_ID} this is the `bitrouter/auto` reference a user selects,
+ * and it travels to the gateway as the request's `model` field.
+ *
+ * BitRouter serves the route; this package only advertises it. Until the
+ * catalog lists `auto` itself, {@link autoModel} synthesizes the entry so the
+ * route is selectable — and once the catalog does list it, the served entry
+ * wins and carries the real metadata.
+ */
+export const AUTO_MODEL_ID = "auto";
+
+/** The `provider/model` reference a harness surface shows for the auto route. */
+export const AUTO_MODEL_REF = `${PROVIDER_ID}/${AUTO_MODEL_ID}`;

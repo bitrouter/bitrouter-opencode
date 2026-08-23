@@ -1,0 +1,19 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "anthropic/claude-fable-5",
+      "object": "model",
+      "providers": [
+        "claude-code"
+      ]
+    },
+    {
+      "id": "anthropic/claude-haiku-4.5",
+      "object": "model",
+      "providers": [
+        "claude-code"
+      ]
+    }
+  ]
+}
