@@ -1,0 +1,6 @@
+{
+  "$comment": "What this plugin has already been checked against. The release watcher compares its findings to these and does nothing when they match, so a missed dispatch self-heals on the next scheduled run instead of being lost. Advanced by the compatibility agent, in the same pull request as any code change it made.",
+  "bitrouter": {
+    "lastProcessedRelease": "v1.0.0-alpha.27"
+  }
+}

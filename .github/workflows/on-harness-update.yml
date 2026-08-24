@@ -1,0 +1,109 @@
+name: On harness update
+
+# Dependabot opens the bump; CI judges it; this runs only when CI said no.
+#
+# The old shape of this ran an agent on every harness bump to ask whether the
+# plugin was still compatible. But that question already has a cheaper and
+# more reliable answer: the build typechecks this package against the new
+# harness types and the suite exercises the contracts underneath them. A green
+# bump needs no opinion, and under auto-merge it merges itself.
+#
+# So the agent runs where the cheap answer runs out — on a bump that broke
+# something — and its job is not to assess but to repair. It pushes onto the
+# Dependabot branch rather than opening a second pull request, so the bump and
+# the fix arrive as one reviewable thing instead of two incomplete ones.
+#
+# `workflow_run` rather than `pull_request_target`: it runs from the default
+# branch, so the workflow definition and the secrets it sees are this
+# repository's own and never the pull request's.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  identify:
+    name: is this a harness bump that failed
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pr: ${{ steps.pick.outputs.pr }}
+      title: ${{ steps.pick.outputs.title }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          PR=$(gh pr list --repo "$REPO" --head "$HEAD" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$PR" ]; then
+            echo "no open pull request for $HEAD — nothing to repair"
+            exit 0
+          fi
+
+          TITLE=$(gh pr view "$PR" --repo "$REPO" --json title --jq .title)
+
+          # Only the harness. A vitest or typescript bump breaking the build is
+          # a real signal too, but it is not what this automation is for, and
+          # an agent let loose on a tooling upgrade tends to rewrite more than
+          # it repairs.
+          #
+          # Matched on the bumped package rather than on Dependabot's label:
+          # the label is configured per update entry and npm allows only one
+          # entry per directory, so every npm bump in this repository carries
+          # `harness-update` whether or not it is one. The package name is the
+          # thing that actually distinguishes them.
+          case "$TITLE" in
+            *"@opencode-ai/"*) ;;
+            *) echo "#$PR does not bump the harness (\"$TITLE\") — leaving it"; exit 0 ;;
+          esac
+
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          echo "repairing #$PR"
+
+  repair:
+    needs: identify
+    if: needs.identify.outputs.pr != ''
+    uses: bitrouter/.github/.github/workflows/plugin-compat.yml@main
+    permissions:
+      contents: read
+    secrets:
+      agent_token: ${{ secrets.PLUGIN_AGENT_TOKEN }}
+      bitrouter_api_key: ${{ secrets.BITROUTER_API_KEY }}
+    with:
+      node_version: "20"
+      install: npm ci
+      build: npm run build
+      test: npm test
+      pull_request: ${{ needs.identify.outputs.pr }}
+      reason: >-
+        Dependabot bumped the opencode harness ("${{ needs.identify.outputs.title }}")
+        and CI failed on the bump.
+      brief: |
+        The dependency is already bumped in this checkout — that part is
+        Dependabot's and is not yours to change. Do not touch `package.json`
+        or the lockfile, and do not pin the harness back to an older version
+        to make the failure go away. Reverting the bump is not a repair; if
+        the new version genuinely cannot be supported yet, change nothing and
+        say so in your report.
+
+        Run the commands above and read the actual failure before changing
+        anything. The usual cause is a moved or renamed export, a changed type
+        signature, or a service contract this plugin implements that gained or
+        lost a member. Adapt this package to the new shape.
+
+        Where the harness changed behaviour rather than types, be careful: a
+        change that still compiles can still be wrong. If the right adaptation
+        depends on intent you cannot read off the diff, leave it and flag it.
