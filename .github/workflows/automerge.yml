@@ -1,0 +1,24 @@
+name: Auto-merge
+
+# A pull request that passes its checks merges itself. The policy — what that
+# excludes, and why — lives once, in bitrouter/.github.
+#
+# `pull_request_target` because a pull request from a fork gets a read-only
+# token on `pull_request`, and enabling auto-merge is a write. Nothing here
+# checks out the pull request's code or runs anything from it: the called
+# workflow only reads the diff's file names through the API and calls
+# `gh pr merge --auto`. The merging itself is GitHub's, gated on the required
+# checks in this repository's branch protection.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, labeled, unlabeled, ready_for_review]
+
+permissions: {}
+
+jobs:
+  enable:
+    uses: bitrouter/.github/.github/workflows/plugin-automerge.yml@main
+    permissions:
+      contents: write
+      pull-requests: write

@@ -1,0 +1,125 @@
+name: On BitRouter release
+
+# A BitRouter gateway release affects this plugin through one surface: the
+# wire. `test/schema.test.ts` already watches the published `/v1/models`
+# contract on a daily clock, so what a release adds is everything the schema
+# cannot describe — an endpoint that moved, an auth flow that changed, a
+# behaviour named in the notes rather than in a type.
+#
+# Two ways in, deliberately. `bitrouter/bitrouter` dispatches here the moment
+# it publishes, which is fast; the schedule is the backstop that notices when
+# a dispatch never arrived, because a token expiring quietly is exactly the
+# kind of failure that a fast path does not report. Both converge on
+# `.github/upstream.json`, so whichever gets there first, the other does
+# nothing.
+
+on:
+  repository_dispatch:
+    types: [bitrouter-release]
+  schedule:
+    - cron: "0 7 * * 1" # Mondays, after the nightly jobs have had their say
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Force a specific BitRouter tag (default: latest release)"
+        required: false
+
+permissions: {}
+
+jobs:
+  check:
+    name: is there a release we have not looked at
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.detect.outputs.tag }}
+      fresh: ${{ steps.detect.outputs.fresh }}
+    steps:
+      - uses: actions/checkout@v6
+        with: { persist-credentials: false }
+      - id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCHED: ${{ github.event.client_payload.tag }}
+          FORCED: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          SEEN=$(jq -r '.bitrouter.lastProcessedRelease' .github/upstream.json)
+
+          TAG="${FORCED:-${DISPATCHED:-}}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh api repos/bitrouter/bitrouter/releases/latest --jq .tag_name 2>/dev/null || true)
+          fi
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "fresh=false" >> "$GITHUB_OUTPUT"
+            echo "no release found for bitrouter/bitrouter"
+            exit 0
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          if [ "$TAG" = "$SEEN" ]; then
+            echo "fresh=false" >> "$GITHUB_OUTPUT"
+            echo "already looked at $TAG"
+            exit 0
+          fi
+
+          # A pull request in any state for this tag's branch counts as
+          # handled: it covers the window while one is open for review, and it
+          # respects a release somebody deliberately closed without merging.
+          COUNT=$(gh pr list --state all --head "chore/bitrouter-$TAG" --json number --jq length)
+          if [ "$COUNT" != "0" ]; then
+            echo "fresh=false" >> "$GITHUB_OUTPUT"
+            echo "a pull request for chore/bitrouter-$TAG already exists"
+            exit 0
+          fi
+
+          echo "fresh=true" >> "$GITHUB_OUTPUT"
+          echo "new BitRouter release: $TAG (last looked at: $SEEN)"
+
+  compat:
+    needs: check
+    if: needs.check.outputs.fresh == 'true'
+    uses: bitrouter/.github/.github/workflows/plugin-compat.yml@main
+    permissions:
+      contents: read
+    secrets:
+      agent_token: ${{ secrets.PLUGIN_AGENT_TOKEN }}
+      bitrouter_api_key: ${{ secrets.BITROUTER_API_KEY }}
+    with:
+      node_version: "20"
+      install: npm ci
+      build: npm run build
+      test: npm test
+      branch: chore/bitrouter-${{ needs.check.outputs.tag }}
+      title: "chore: check @bitrouter/opencode against BitRouter ${{ needs.check.outputs.tag }}"
+      reason: >-
+        BitRouter released ${{ needs.check.outputs.tag }}, and this plugin
+        talks to that gateway.
+      brief: |
+        Read the release notes first:
+
+            gh release view ${{ needs.check.outputs.tag }} --repo bitrouter/bitrouter --json body --jq .body
+
+        Most releases need no change here. This plugin is coupled to the
+        gateway's HTTP surface and nothing else — it ships no binary, pins no
+        gateway version, and downloads nothing. So act only on notes that
+        describe a change to something it actually uses: a `/v1/*` endpoint's
+        path, its response shape, its auth, or the reserved `bitrouter/auto`
+        slug and the preset resolution behind it.
+
+        Do NOT act on a change to the routing policy engine, the TUI, config
+        file handling, telemetry, or anything else that never crosses the
+        wire this plugin speaks over. Those move constantly and none of them
+        reach this package.
+
+        The response shape has its own watcher — `test/schema.test.ts` checks
+        the published `/v1/models` schema daily and fails on any field that
+        appears or disappears. If the notes describe a models-endpoint change,
+        expect that suite to have caught it already; say so rather than
+        duplicating the work.
+
+        Whatever you conclude, set `.bitrouter.lastProcessedRelease` in
+        `.github/upstream.json` to "${{ needs.check.outputs.tag }}". Do this
+        even when nothing else changed — it is what records that this release
+        was examined, and what stops the watcher from asking again every week.
