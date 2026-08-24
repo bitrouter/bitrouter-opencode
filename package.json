@@ -55,7 +55,7 @@
     "@opencode-ai/sdk": "^1.18.18",
     "@types/node": "^20.0.0",
     "ajv": "^8.20.0",
-    "typescript": "^5.4.0",
+    "typescript": "^7.0.2",
     "vitest": "^1.6.0"
   }
 }
