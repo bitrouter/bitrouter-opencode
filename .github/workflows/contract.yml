@@ -1,0 +1,81 @@
+name: Contract
+
+# Watch the contract this plugin maps against.
+#
+# BitRouter Cloud publishes its `GET /v1/models` response schema, generated
+# from the Rust types that serialize the response. This job re-vendors that
+# schema and, when it has moved, opens a pull request carrying the diff.
+#
+# The point is not the schema file. It is `test/schema.test.ts`, which fails
+# when a field appears that nobody has decided about, or disappears while this
+# package still reads it. A dropped field is the dangerous direction: nothing
+# errors, the mapping silently falls back to a default, and the catalog goes
+# quietly wrong. That is not hypothetical — it is what happened when this
+# package read `context_window`.
+#
+# Deliberately not part of the pull-request build. That build has to be
+# offline and deterministic to be worth gating merges on; this one talks to a
+# live service, so it runs on a clock where a flake costs nothing.
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  refresh:
+    name: re-vendor the published schema
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: npm }
+      - run: npm ci
+
+      - name: re-vendor schema/models.schema.json
+        run: npm run schema:refresh
+
+      # A pull request opened with the default GITHUB_TOKEN does not trigger
+      # workflows — GitHub suppresses that to stop a job from re-triggering
+      # itself. Which would leave this pull request with no checks at all, and
+      # a required check that never reports blocks a merge forever. So it
+      # wants a real token. Set CONTRACT_PR_TOKEN to a fine-grained PAT (or an
+      # app installation token) with contents:write and pull-requests:write on
+      # this repository.
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.CONTRACT_PR_TOKEN }}
+          branch: chore/contract-refresh
+          base: main
+          add-paths: schema/models.schema.json
+          commit-message: "chore: re-vendor BitRouter Cloud's /v1/models schema"
+          title: "chore: BitRouter Cloud's /v1/models contract has moved"
+          labels: contract
+          body: |
+            `schema/models.schema.json` no longer matches the schema BitRouter
+            Cloud publishes at <https://api.bitrouter.ai/openapi.json>.
+
+            The diff is the contract change. What matters is whether the suite
+            still passes on it:
+
+            - **Green** — the change is one this package already tolerates.
+              Merge it.
+            - **Red on the field-set assertion** — a field appeared or
+              vanished. Decide what to do with it and record the decision in
+              `ACKNOWLEDGED` in `test/schema.test.ts`.
+            - **Red on fixture conformance** — `test/fixtures/cloud-models.json`
+              predates the change. Recapture it:
+              `curl -s https://api.bitrouter.ai/v1/models`.
+            - **Red on tiered pricing** — a fixture row with `context_tiers`
+              is gone from the catalog. Pick another from the same call.
+
+      # After the pull request, not before: if the new contract breaks the
+      # assertions, this job should go red *and* the pull request should still
+      # exist to show why.
+      - name: check the vendored contract against this package's assumptions
+        run: npm test

@@ -43,7 +43,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "schema:refresh": "node scripts/refresh-schema.mjs",
+    "schema:check": "node scripts/refresh-schema.mjs --check"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.18.0"
@@ -52,6 +54,7 @@
     "@opencode-ai/plugin": "^1.18.18",
     "@opencode-ai/sdk": "^1.18.18",
     "@types/node": "^20.0.0",
+    "ajv": "^8.20.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
   }
