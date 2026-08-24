@@ -1,12 +1,12 @@
 name: Publish
 
-# The human gate.
+# The step that reaches somebody.
 #
 # Everything else in this repository is allowed to merge itself: a Dependabot
-# bump or an automated compatibility fix that goes green on `main` needs no
-# review, because `main` reaches nobody. This workflow is the step that does
-# reach somebody, so it is the one a person has to perform — by drafting a
-# GitHub release and pressing publish.
+# bump or an automated compatibility fix that goes green needs no review,
+# because `main` reaches nobody. Publishing does, so it happens only from a
+# tag a person decided to create — either by merging the release pull request
+# (see release.yml) or by drafting a release by hand.
 #
 # Deliberately NOT `on: push: branches: [main]`. That trigger would collapse
 # the merge gate and the release gate into one, and the whole safety of
@@ -14,6 +14,12 @@ name: Publish
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to publish. Required when called; taken from the release otherwise."
+        required: true
+        type: string
 
 permissions: {}
 
@@ -28,9 +34,36 @@ jobs:
       # this workflow from this commit, which is checkable by anyone.
       id-token: write
     steps:
+      - name: resolve the tag
+        id: tag
+        env:
+          CALLED: ${{ inputs.tag }}
+          FROM_RELEASE: ${{ github.event.release.tag_name }}
+          MARKED_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          TAG="${CALLED:-$FROM_RELEASE}"
+          if [ -z "$TAG" ]; then
+            echo "::error::no tag to publish"; exit 1
+          fi
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
+
+          # Prerelease if the semver says so or the release was marked as one.
+          # The union rather than either alone: a hyphenated version published
+          # as `latest` would be handed to everyone running a plain install,
+          # and a release somebody deliberately marked prerelease should be
+          # honoured whatever its tag looks like.
+          case "$TAG" in
+            *-*) PRE=true ;;
+            *)   PRE="${MARKED_PRERELEASE:-false}" ;;
+          esac
+          [ "$PRE" = "true" ] || PRE=false
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+          echo "publishing $TAG (prerelease=$PRE)"
+
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ steps.tag.outputs.name }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -38,12 +71,12 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      # A release tag that disagrees with package.json publishes a version
-      # nobody asked for, under a git ref that does not contain it. Cheaper to
-      # refuse here than to deprecate afterwards.
+      # A tag that disagrees with package.json publishes a version nobody
+      # asked for, under a git ref that does not contain it. Cheaper to refuse
+      # here than to deprecate afterwards.
       - name: check the tag against package.json
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ steps.tag.outputs.name }}
         run: |
           set -euo pipefail
           PKG=$(node -p "require('./package.json').version")
@@ -53,20 +86,18 @@ jobs:
           fi
           echo "publishing $PKG from $TAG"
 
-      # The same checks `main` had to pass, run once more against the tagged
-      # tree. A release can be cut from any ref, so being green on `main` is
-      # not by itself evidence about what is in the tarball.
+      # The same checks main had to pass, run once more against the tagged
+      # tree. A release can be cut from any ref, so being green on main is not
+      # by itself evidence about what is in the tarball.
       - run: npm ci
       - run: npm run build
       - run: npx tsc --noEmit -p tsconfig.test.json
       - run: npm test
 
-      # A prerelease goes out under the `next` tag, so `npm i @bitrouter/opencode`
-      # keeps resolving to the last stable one.
       - name: publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PRERELEASE: ${{ github.event.release.prerelease }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
         run: |
           set -euo pipefail
           if [ "$PRERELEASE" = "true" ]; then

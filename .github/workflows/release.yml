@@ -1,0 +1,61 @@
+name: Release
+
+# Turns merged work into a released version, in two steps with a person
+# between them.
+#
+# release-please keeps one pull request open against `main`, holding the next
+# version and the changelog entries it derived from the commit subjects since
+# the last release. It rewrites that pull request as more lands. Nothing is
+# published while it sits there.
+#
+# Merging it is the decision to ship — the one step this whole maintenance
+# system asks a person to perform. That merge creates the tag and the GitHub
+# release, and this workflow then publishes to npm from the tag.
+#
+# The release pull request is deliberately NOT in plugin-automerge's list of
+# automation branches. It is the gate; a gate that opens itself is furniture.
+on:
+  push:
+    branches: [main]
+  schedule:
+    # A merge performed by GitHub's auto-merge is attributed to
+    # `github-actions[bot]`, and a push from that token does not trigger
+    # workflows — so a Dependabot bump that merges itself never reaches the
+    # `push` trigger above. Without this, the release pull request would
+    # silently stop reflecting anything that merged on its own.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  prepare:
+    name: keep the release pull request current
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Called rather than left to `publish.yml`'s own `release: published`
+  # trigger: release-please creates that release with GITHUB_TOKEN, and a
+  # release created by that token does not trigger workflows. The publish has
+  # to be invoked, not waited for.
+  publish:
+    needs: prepare
+    if: needs.prepare.outputs.released == 'true'
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      contents: read
+      id-token: write
+    secrets: inherit
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
