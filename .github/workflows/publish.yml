@@ -1,0 +1,76 @@
+name: Publish
+
+# The human gate.
+#
+# Everything else in this repository is allowed to merge itself: a Dependabot
+# bump or an automated compatibility fix that goes green on `main` needs no
+# review, because `main` reaches nobody. This workflow is the step that does
+# reach somebody, so it is the one a person has to perform — by drafting a
+# GitHub release and pressing publish.
+#
+# Deliberately NOT `on: push: branches: [main]`. That trigger would collapse
+# the merge gate and the release gate into one, and the whole safety of
+# auto-merge rests on them being separate.
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  publish:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      # npm provenance: the registry attests that this tarball was built by
+      # this workflow from this commit, which is checkable by anyone.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      # A release tag that disagrees with package.json publishes a version
+      # nobody asked for, under a git ref that does not contain it. Cheaper to
+      # refuse here than to deprecate afterwards.
+      - name: check the tag against package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          PKG=$(node -p "require('./package.json').version")
+          if [ "${TAG#v}" != "$PKG" ]; then
+            echo "::error::release tag '$TAG' does not match package.json version '$PKG'"
+            exit 1
+          fi
+          echo "publishing $PKG from $TAG"
+
+      # The same checks `main` had to pass, run once more against the tagged
+      # tree. A release can be cut from any ref, so being green on `main` is
+      # not by itself evidence about what is in the tarball.
+      - run: npm ci
+      - run: npm run build
+      - run: npx tsc --noEmit -p tsconfig.test.json
+      - run: npm test
+
+      # A prerelease goes out under the `next` tag, so `npm i @bitrouter/opencode`
+      # keeps resolving to the last stable one.
+      - name: publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          if [ "$PRERELEASE" = "true" ]; then
+            npm publish --provenance --access public --tag next
+          else
+            npm publish --provenance --access public
+          fi

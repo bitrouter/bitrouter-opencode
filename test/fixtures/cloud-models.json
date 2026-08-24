@@ -26,8 +26,26 @@
       "capabilities": [
         "reasoning"
       ],
+      "hosted": true,
+      "open_weights": false,
       "providers": {
         "total_online": 1
+      },
+      "latency": {
+        "first_token": {
+          "best_p50_ms": null,
+          "best_p95_ms": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
+      },
+      "throughput": {
+        "output_tokens": {
+          "best_p50_tokens_per_second": null,
+          "best_p95_tokens_per_second": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
       }
     },
     {
@@ -55,8 +73,77 @@
       "capabilities": [
         "tools"
       ],
+      "hosted": true,
+      "open_weights": false,
       "providers": {
         "total_online": 1
+      },
+      "latency": {
+        "first_token": {
+          "best_p50_ms": null,
+          "best_p95_ms": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
+      },
+      "throughput": {
+        "output_tokens": {
+          "best_p50_tokens_per_second": null,
+          "best_p95_tokens_per_second": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
+      }
+    },
+    {
+      "id": "anthropic/claude-sonnet-5",
+      "name": "Anthropic: Claude Sonnet 5",
+      "description": "Anthropic's Claude Sonnet 5.",
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 128000,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "pricing": {
+        "input_tokens": {
+          "no_cache": 2.0,
+          "cache_read": 0.2,
+          "cache_write": 2.5
+        },
+        "output_tokens": {
+          "text": 10.0
+        }
+      },
+      "capabilities": [
+        "image_input",
+        "reasoning",
+        "structured_outputs",
+        "tools"
+      ],
+      "hosted": true,
+      "open_weights": false,
+      "providers": {
+        "total_online": 1
+      },
+      "latency": {
+        "first_token": {
+          "best_p50_ms": null,
+          "best_p95_ms": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
+      },
+      "throughput": {
+        "output_tokens": {
+          "best_p50_tokens_per_second": null,
+          "best_p95_tokens_per_second": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
       }
     },
     {
@@ -86,8 +173,85 @@
         "structured_outputs",
         "tools"
       ],
+      "hosted": true,
+      "open_weights": false,
       "providers": {
         "total_online": 2
+      },
+      "latency": {
+        "first_token": {
+          "best_p50_ms": null,
+          "best_p95_ms": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
+      },
+      "throughput": {
+        "output_tokens": {
+          "best_p50_tokens_per_second": null,
+          "best_p95_tokens_per_second": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
+      }
+    },
+    {
+      "id": "x-ai/grok-4.3",
+      "name": "xAI: Grok 4.3",
+      "max_input_tokens": 1000000,
+      "max_output_tokens": 30000,
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "pricing": {
+        "input_tokens": {
+          "no_cache": 1.25,
+          "cache_read": 0.2
+        },
+        "output_tokens": {
+          "text": 2.5
+        },
+        "context_tiers": [
+          {
+            "above_input_tokens": 200000,
+            "input_tokens": {
+              "no_cache": 2.5,
+              "cache_read": 0.4
+            },
+            "output_tokens": {
+              "text": 5.0
+            }
+          }
+        ]
+      },
+      "capabilities": [
+        "reasoning",
+        "tools"
+      ],
+      "hosted": true,
+      "open_weights": false,
+      "providers": {
+        "total_online": 2
+      },
+      "latency": {
+        "first_token": {
+          "best_p50_ms": null,
+          "best_p95_ms": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
+      },
+      "throughput": {
+        "output_tokens": {
+          "best_p50_tokens_per_second": null,
+          "best_p95_tokens_per_second": null,
+          "sample_count": 0,
+          "window_seconds": 3600
+        }
       }
     }
   ]

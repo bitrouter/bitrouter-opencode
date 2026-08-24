@@ -9,8 +9,9 @@ import type { DiscoveredModel } from "../src/discovery.js";
  * planes, so a future change to the field mapping is caught by the wire and
  * not by a hand-written guess at it.
  *
- * The fixtures are trimmed to the fields this package reads; every value in
- * them is exactly what the endpoint served.
+ * The fixtures are verbatim rows, not trimmed ones: `test/schema.test.ts`
+ * checks them against BitRouter Cloud's published schema, and a capture with
+ * the uninteresting fields cut out would conform to nothing.
  */
 function catalog(name: string): DiscoveredModel[] {
   const path = fileURLToPath(new URL(`./fixtures/${name}.json`, import.meta.url));
@@ -62,7 +63,7 @@ describe("BitRouter Cloud wire shape", () => {
   it("leads with the auto route", () => {
     const { models } = mapped("cloud-models");
     expect(models[0].id).toBe("bitrouter/auto");
-    expect(models).toHaveLength(4); // three served + auto
+    expect(models).toHaveLength(6); // five served + auto
   });
 });
 
