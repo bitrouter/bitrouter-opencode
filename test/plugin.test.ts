@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Hooks, PluginInput } from "@opencode-ai/plugin";
-import { BitRouterPlugin, PROVIDER_ID } from "../src/index.js";
+import { AUTO_MODEL_REF, BitRouterPlugin, PROVIDER_ID } from "../src/index.js";
 
 /**
  * Behavioral tests for the three hooks the plugin returns. The contract:
@@ -11,12 +11,20 @@ import { BitRouterPlugin, PROVIDER_ID } from "../src/index.js";
  *    refreshing an expired OAuth grant rather than sending a dead token.
  *  - `provider.models` replaces the seed catalog with the live one, and keeps
  *    the current catalog rather than blanking it when discovery fails.
+ *
+ * The `auto` route leads every catalog these hooks produce, and `config` names
+ * it as the default model, which is what makes a bare
+ * `"plugin": ["@bitrouter/opencode"]` a complete installation.
  */
 
 const CATALOG = {
   data: [
-    { id: "kimi-k2.5", name: "Kimi K2.5", context_window: 256000 },
-    { id: "claude-opus-4-8", name: "Claude Opus 4.8", reasoning: true },
+    { id: "kimi-k2.5", name: "Kimi K2.5", max_input_tokens: 256000 },
+    {
+      id: "claude-opus-4-8",
+      name: "Claude Opus 4.8",
+      capabilities: ["reasoning", "tools"],
+    },
   ],
 };
 
@@ -79,7 +87,7 @@ type ProviderBlock = {
   npm?: string;
   name?: string;
   options: { baseURL?: string; apiKey?: string };
-  models: Record<string, { name?: string }>;
+  models: Record<string, { name?: string; limit?: { context?: number; output?: number } }>;
 };
 
 function providerBlock(config: unknown): ProviderBlock {
@@ -112,11 +120,40 @@ describe("config hook", () => {
     expect(p.options.baseURL).toBe("http://127.0.0.1:4356/v1");
     // loopback daemons run skip_auth, but opencode still wants a key present
     expect(p.options.apiKey).toBe("bitrouter-local");
-    expect(Object.keys(p.models).sort()).toEqual(["claude-opus-4-8", "kimi-k2.5"]);
+    expect(Object.keys(p.models).sort()).toEqual(["bitrouter/auto", "claude-opus-4-8", "kimi-k2.5"]);
     expect(p.models["kimi-k2.5"].name).toBe("Kimi K2.5");
+    expect(p.models["kimi-k2.5"].limit?.context).toBe(256000);
   });
 
-  it("seeds a placeholder model when the catalog is unreachable", async () => {
+  it("makes the auto route the default model and small model", async () => {
+    stubFetch({ "/models": CATALOG });
+    const hooks = await load({ BITROUTER_TARGET: "local" });
+    const config: Record<string, unknown> = {};
+    await hooks.config!(config);
+
+    expect(config.model).toBe(AUTO_MODEL_REF);
+    // opencode references a model as `<provider>/<model id>`, and the model id
+    // here is BitRouter's reserved slug `bitrouter/auto` — so the vendor
+    // segment appears twice, exactly as it does for every catalog model
+    // (`bitrouter/anthropic/claude-opus-4.6`).
+    expect(config.model).toBe("bitrouter/bitrouter/auto");
+    expect(config.small_model).toBe(AUTO_MODEL_REF);
+  });
+
+  it("leaves a model the user already chose alone", async () => {
+    stubFetch({ "/models": CATALOG });
+    const hooks = await load({ BITROUTER_TARGET: "local" });
+    const config: Record<string, unknown> = {
+      model: "anthropic/claude-opus-4-8",
+      small_model: "anthropic/claude-haiku-4.5",
+    };
+    await hooks.config!(config as never);
+
+    expect(config.model).toBe("anthropic/claude-opus-4-8");
+    expect(config.small_model).toBe("anthropic/claude-haiku-4.5");
+  });
+
+  it("still offers the auto route when the catalog is unreachable", async () => {
     stubFetch({ "/models": new Error("ECONNREFUSED") });
     const hooks = await load({ BITROUTER_TARGET: "cloud" });
     const config = {};
@@ -126,7 +163,9 @@ describe("config hook", () => {
     expect(p.options.baseURL).toBe("https://api.bitrouter.ai/v1");
     // no filler key on cloud — the user authenticates for real
     expect(p.options.apiKey).toBeUndefined();
-    expect(Object.keys(p.models)).toEqual(["kimi-k2.5"]);
+    // Unreachable is not unusable: the auto route keeps the provider
+    // selectable, which is what makes `/connect` reachable at all.
+    expect(Object.keys(p.models)).toEqual(["bitrouter/auto"]);
   });
 
   it("does not overwrite a provider block the user wrote", async () => {
@@ -148,6 +187,7 @@ describe("config hook", () => {
     expect(p.options.baseURL).toBe("https://proxy.internal/v1");
     // the user's model survives, and the discovered ones are added alongside
     expect(Object.keys(p.models).sort()).toEqual([
+      "bitrouter/auto",
       "claude-opus-4-8",
       "kimi-k2.5",
       "my-model",
@@ -257,7 +297,7 @@ describe("provider hook", () => {
     const models = await hooks.provider!.models!(provider, {
       auth: { type: "api", key: "brvk_1" },
     });
-    expect(Object.keys(models).sort()).toEqual(["claude-opus-4-8", "kimi-k2.5"]);
+    expect(Object.keys(models).sort()).toEqual(["bitrouter/auto", "claude-opus-4-8", "kimi-k2.5"]);
     expect(models["kimi-k2.5"].limit.context).toBe(256000);
   });
 

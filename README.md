@@ -2,9 +2,9 @@
 
 An [opencode plugin](https://opencode.ai/docs/plugins/) that wires
 [BitRouter](https://github.com/bitrouter/bitrouter) in as a provider. It
-declares the provider for you, discovers the available models from your
-BitRouter instance instead of shipping a hard-coded list, and adds a BitRouter
-Cloud device login to `/connect`.
+declares the provider for you, makes `bitrouter/auto` your default model,
+discovers the available models from your BitRouter instance instead of shipping
+a hard-coded list, and adds a BitRouter Cloud device login to `/connect`.
 
 BitRouter can run two ways:
 
@@ -28,7 +28,11 @@ caches it automatically:
 ```
 
 That is the whole configuration. The plugin contributes the `provider.bitrouter`
-block itself, so you do not need to write one.
+block itself, and sets `model` and `small_model` to `bitrouter/auto`, so you do
+not need to write either one.
+
+A `model` you set yourself always wins — the plugin only fills in what your
+config leaves out.
 
 Then authenticate:
 
@@ -52,14 +56,38 @@ stage of the provider's life:
 
 | Hook | What it does |
 |---|---|
-| `config` | Declares the `bitrouter` provider (`@ai-sdk/openai-compatible`, the resolved base URL) seeded with whatever catalog is reachable at load time. A `provider.bitrouter` block you wrote yourself always wins — the hook only fills in what you left out. |
+| `config` | Declares the `bitrouter` provider (`@ai-sdk/openai-compatible`, the resolved base URL) seeded with whatever catalog is reachable at load time, and names `bitrouter/auto` as `model` and `small_model`. A `provider.bitrouter` block — or a `model` — you wrote yourself always wins; the hook only fills in what you left out. |
 | `auth` | Offers the device login and the API-key method, and turns whichever credential is stored into provider options. An expired OAuth grant is refreshed per request and written back through `client.auth.set`. |
-| `provider` | Re-discovers the live catalog via `GET ${baseUrl}/models` once a credential exists, so the model list reflects your account rather than the seed. If discovery fails it keeps the current list rather than blanking it. |
+| `provider` | Re-discovers the live catalog via `GET ${baseUrl}/models` once a credential exists, so the model list reflects your account rather than the seed. The auto route leads the refreshed list too. If discovery fails it keeps the current list rather than blanking it. |
+
+## The auto route
+
+`bitrouter/auto` hands model choice back to BitRouter: the request carries
+`bitrouter/auto` as its model and the gateway's routing policy picks the model
+per request. `bitrouter/` is a namespace BitRouter reserves for itself, so the
+vendor segment names the router being addressed rather than the token
+destination. It leads every catalog the plugin produces, and it is the default
+`model` and `small_model`.
+
+The rest of the catalog is still there. `bitrouter/auto` is the default, not
+the only option — pin `bitrouter/anthropic/claude-opus-5` (or anything else
+BitRouter serves) with `/models` or in `opencode.json` whenever you want one
+specific model, and switch back whenever you do not.
 
 Before you authenticate on cloud there is no token to discover with, so the
-provider is seeded with a single placeholder model. That is deliberate:
-without at least one model the provider would not be selectable and you could
-not reach `/connect` at all. It is replaced by the real catalog on first use.
+provider is seeded with the auto route alone. That is deliberate: without at
+least one model the provider would not be selectable and you could not reach
+`/connect` at all. The rest of the catalog fills in on first use.
+
+Until BitRouter's own catalog lists `bitrouter/auto`, the plugin synthesizes the entry
+with deliberately conservative capacities (128K context, 16K output). They are
+the floor rather than the ceiling on purpose — `auto` may land on any model in
+the ladder, and under-claiming compacts a session early where over-claiming
+fails a request outright, mid-turn. A gateway that ever serves an entry under
+this id supersedes the placeholder, though none does today: the namespace is
+resolved before any provider lookup and BitRouter's registry validator
+refuses catalog models under `bitrouter/`, so the entry has to come from
+here.
 
 ## Configuration
 
@@ -93,11 +121,11 @@ device login, and you maintain the model list yourself.
 
 ## Troubleshooting
 
-**The model list only shows `kimi-k2.5`**
+**The model list only shows `bitrouter/auto`**
 
-That is the placeholder — the catalog has not been fetched yet. Run
-`opencode auth login` and connect BitRouter; the real list appears on the next
-request.
+The catalog has not been fetched yet. Run `opencode auth login` and connect
+BitRouter; the real list appears on the next request. `bitrouter/auto` itself
+still works meanwhile — routing is the gateway's job, not the plugin's.
 
 **`model refresh failed at .../models: HTTP 401`**
 

@@ -1,8 +1,13 @@
 import type { AuthHook, Hooks, Plugin } from "@opencode-ai/plugin";
 import type { Auth } from "@opencode-ai/sdk/v2";
-import { bitrouter } from "./constants.js";
+import { AUTO_MODEL_REF, PROVIDER_ID } from "./constants.js";
 import { discoverModels, type DiscoveredModel } from "./discovery.js";
-import { OPENAI_COMPATIBLE_NPM, toConfigModel, toRuntimeModel } from "./models.js";
+import {
+  OPENAI_COMPATIBLE_NPM,
+  toConfigModel,
+  toRuntimeModel,
+  withAutoModel,
+} from "./models.js";
 import {
   EXPIRY_SKEW_MS,
   pollForToken,
@@ -13,13 +18,17 @@ import {
 } from "./oauth.js";
 import { resolveSmartTarget } from "./target.js";
 
-/** The provider id. Must match the key used in `opencode.json` and `/connect`. */
-export const PROVIDER_ID = "bitrouter";
-
-/** A placeholder catalog so the provider stays selectable before authentication. */
-function placeholderModels(): DiscoveredModel[] {
-  return [{ id: bitrouter.defaultModel, name: `${bitrouter.defaultModel} (BitRouter)` }];
-}
+export { AUTO_MODEL_ID, AUTO_MODEL_REF, PROVIDER_ID, bitrouter } from "./constants.js";
+export { discoverModels, hasCapability, providerCount } from "./discovery.js";
+export type { DiscoveredModel, DiscoveredPricing } from "./discovery.js";
+export {
+  OPENAI_COMPATIBLE_NPM,
+  autoModel,
+  toConfigModel,
+  toCost,
+  toRuntimeModel,
+  withAutoModel,
+} from "./models.js";
 
 /** Pull a usable bearer token out of whatever opencode has stored for us. */
 function tokenFrom(auth: Auth | undefined): string | undefined {
@@ -62,19 +71,20 @@ export const BitRouterPlugin: Plugin = async ({ client }): Promise<Hooks> => {
   };
 
   // Seed catalog: best effort at load time. Cloud before `/connect` has no
-  // token, so this usually falls back to the placeholder and the `provider`
-  // hook fills in the real list later.
-  let seed: DiscoveredModel[];
+  // token, so this often discovers nothing and the `provider` hook fills in
+  // the real list later. `withAutoModel` still puts the auto route at the head
+  // either way, which is what keeps the provider selectable — and therefore
+  // `/connect` reachable — before any credential exists.
+  let discovered: DiscoveredModel[] = [];
   try {
-    seed = await discoverModels(target.baseUrl, configuredKey);
-    if (seed.length === 0) {
-      log("info", `no models at ${target.baseUrl}/models yet; using a placeholder`);
-      seed = placeholderModels();
+    discovered = await discoverModels(target.baseUrl, configuredKey);
+    if (discovered.length === 0) {
+      log("info", `no models at ${target.baseUrl}/models yet; offering ${AUTO_MODEL_REF} alone`);
     }
   } catch (err) {
-    log("info", `model discovery deferred (${String(err)}); using a placeholder`);
-    seed = placeholderModels();
+    log("info", `model discovery deferred (${String(err)}); offering ${AUTO_MODEL_REF} alone`);
   }
+  const seed = withAutoModel(discovered);
 
   // Serialize refreshes so concurrent requests don't each burn the refresh token.
   let refreshing: Promise<BitrouterCredentials> | undefined;
@@ -137,6 +147,20 @@ export const BitRouterPlugin: Plugin = async ({ client }): Promise<Hooks> => {
         },
         models: { ...seeded, ...(existing?.models ?? {}) },
       };
+
+      // Make BitRouter the default the moment the plugin is installed, so a
+      // fresh `opencode.json` carrying nothing but `"plugin": ["@bitrouter/opencode"]`
+      // lands on the auto route with no second configuration step.
+      //
+      // `??=` is the whole of the courtesy: a `model` the user wrote in their
+      // own config, or another plugin set first, is already on `config` by the
+      // time this hook runs and is left exactly as it stands. Title generation
+      // and the other small-model errands go the same way — routing them
+      // through `auto` is what the auto route is for, and BitRouter's own
+      // policy ladder is a better judge of "cheap enough for this" than a
+      // hardcoded second model id would be.
+      config.model ??= AUTO_MODEL_REF;
+      config.small_model ??= AUTO_MODEL_REF;
     },
 
     auth: {
@@ -186,8 +210,11 @@ export const BitRouterPlugin: Plugin = async ({ client }): Promise<Hooks> => {
           log("warn", "BitRouter returned an empty model catalog");
           return provider.models ?? {};
         }
+        // The auto route leads the refreshed catalog too — a gateway that does
+        // not list it yet must not have it disappear from under a session that
+        // is already using it.
         return Object.fromEntries(
-          discovered.map((m) => [m.id, toRuntimeModel(m, provider)]),
+          withAutoModel(discovered).map((m) => [m.id, toRuntimeModel(m, provider)]),
         );
       },
     },
