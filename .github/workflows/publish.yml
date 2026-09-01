@@ -28,7 +28,7 @@ jobs:
       # this workflow from this commit, which is checkable by anyone.
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
           persist-credentials: false
