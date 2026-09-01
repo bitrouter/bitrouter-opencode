@@ -36,7 +36,7 @@ jobs:
       tag: ${{ steps.detect.outputs.tag }}
       fresh: ${{ steps.detect.outputs.fresh }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with: { persist-credentials: false }
       - id: detect
         env:
