@@ -51,7 +51,7 @@
     "@opencode-ai/plugin": ">=1.18.0"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "^1.18.25",
+    "@opencode-ai/plugin": "^1.18.29",
     "@opencode-ai/sdk": "^1.18.29",
     "@types/node": "^26.4.1",
     "ajv": "^8.20.0",
